@@ -1,0 +1,68 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      routes:
+        - id: order-service
+          uri: ${ORDER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/orders/**
+          filters:
+            - name: RequestRateLimiter
+            - AddRequestHeader=X-Gateway-Source, api-gateway
+
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/payments/**
+          filters:
+            - AddRequestHeader=X-Gateway-Source, api-gateway
+
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/notifications/**
+          filters:
+            - AddRequestHeader=X-Gateway-Source, api-gateway
+
+      default-filters:
+        # Propagate correlation ID to all downstream services
+        - AddRequestHeader=X-Correlation-Id, ${correlationId:}
+
+  # Gateway uses WebFlux — no Tomcat
+  main:
+    web-application-type: reactive
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+    # Public paths that bypass JWT validation
+    public-paths:
+      - /actuator/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.orderprocessing: DEBUG
+    org.springframework.cloud.gateway: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{correlationId}] %-5level %logger{36} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
